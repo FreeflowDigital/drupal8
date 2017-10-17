@@ -1,5 +1,9 @@
 #!/bin/bash
 
+## Install patternlab, some plugins, starterkit, set some config options and link patterns and css to drupal theme.
+##
+## Usage: fin patternlab-install
+
 #-------------------------- Settings --------------------------------
 
 # PROJECT_ROOT is passed from fin.
@@ -33,7 +37,6 @@ echo-yellow () { echo -e "${yellow}$1${NC}"; }
 #-------------------------- END: Helper functions --------------------------------
 
 cd $PROJECT_ROOT
-PWD
 
 echo
 echo -n "Which theme do you want to install patternlab? "
@@ -52,30 +55,48 @@ cd $THEME_PATH
 echo ""
 echo "Installing to $THEME_PATH/patternlab"
 echo ""
-echo-yellow "You will be asked some questions upon install, the answers are important so pay attention."
-echo "Question: No composer.json in current directory, do you want to use the one at <project root>"
-echo "Answer: n"
-echo "Next three questions: the path <some path> already exists..."
-echo "Answer: r"
-echo "Quesetion: choose a starterkit"
-echo "Answer: 2: pattern-lab/starterkit-twig-drupal-minimal"
-echo "Question: a starterkit is already installed. merge the new files with it or replace it?"
-echo "Answer: M"
+
+/usr/bin/expect -c "
+  set timeout 3600
+  spawn -noecho composer create-project drupal-pattern-lab/edition-twig-standard patternlab
+  expect \"choose an option or hit return to skip:\"
+  send \"\r\"
+  interact
+"
+cd patternlab
+
+php core/console -c --set twigAutoescape=0
 echo ""
 
-composer create-project pattern-lab/edition-drupal-standard patternlab
-
-sed -i '.bak' "s/twigAutoescape: html/twigAutoescape: false/g" patternlab/config/config.yml
-echo-green "Set autoescape to false in patternlab/config/config.yml saved backup to patternlab/config/config.yml.bak"
+echo-green "Installing data transform plugin and drupal twig components"
+composer require aleksip/plugin-data-transform pattern-lab/drupal-twig-components
 echo ""
-sed -i '.bak' "s:../../css/style.css:../../../../css/style.css:g" patternlab/source/_meta/_00-head.twig
+
+echo-green "Installing drupal minimal starterkit"
+echo ""
+php core/console --starterkit --install pattern-lab/starterkit-twig-drupal-minimal
+
+cd source/css
+curl -O https://raw.githubusercontent.com/pattern-lab/starterkit-twig-base/master/dist/css/pattern-scaffolding.css
+cd ../../
+echo ""
+
+sed -i '.bak' -e '/style.css/a \
+<link rel="stylesheet" href="../../css/pattern-scaffolding.css?{{ cacheBuster }}" media="all" /> \
+' source/_meta/_00-head.twig
+echo-green "Added pattern-scaffolding.css file and link tag in patternlab/source/_meta/_00-head.twig"
+
+echo ""
+sed -i '.bak' "s:../../css/style.css:../../../../css/style.css:g" source/_meta/_00-head.twig
 echo-green "Set patternlab css path to use theme css in patternlab/source/_meta/_00-head.twig saved backup to patternlab/source/_meta/_00-head.twig.bak"
 echo ""
 
+cd ..
 fin exec php patternlab/core/console --generate
 
 echo ""
 cd templates
+
 ln -s ../patternlab/source/_patterns/ patterns
 echo-green "Linked patternlab _patterns dir to theme/templates/patterns"
 echo ""
@@ -89,12 +110,10 @@ echo "To watch patternlab files for changes and compile:"
 echo "fin patternlab-watch of fin patternlab-watch themename"
 echo ""
 echo "To start a server to view patternlab:"
-echo "fin exec php core/console --server"
-echo "Then open: http://localhost:8080 in your browser."
-echo "Or open patternlab/public/index.html"
+echo "cd src/themes/THEMENAME/patternlab"
+echo "php core/console --server"
+echo "Or just open patternlab/public/index.html in your browser"
 echo ""
-echo "To compile, watch, and run server:"
-echo "fin exec composer start"
-echo ""
+
 
 
